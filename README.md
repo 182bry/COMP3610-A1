@@ -49,3 +49,4 @@ venv\Scripts\activate
 ```streamlit run app.py```
 
 ### Deployed Dashboard URL: 
+https://comp3610-a1-lmyotw2rogcwuxxpmlixme.streamlit.app/ 
