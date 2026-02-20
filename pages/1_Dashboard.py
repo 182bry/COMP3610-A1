@@ -2,13 +2,25 @@
 COMP 3610 Assignment 1 - Dashboard Page (Required Visualizations)
 """
 
+import traceback
 import streamlit as st
 import pandas as pd
 import plotly.express as px
 import os 
 import requests
 
-st.set_page_config(page_title="Dashboard", page_icon="📊", layout="wide")
+st.write("Dashboard page started")
+st.write("cwd:", os.getcwd())
+st.write("here:", os.listdir("."))
+
+try:
+    st.write("data exists:", os.path.exists("data"))
+    st.write("processed exists:", os.path.exists("data/processed"))
+    if os.path.exists("data/processed"):
+        st.write("processed files:", os.listdir("data/processed"))
+except Exception:
+    st.code(traceback.format_exc())
+
 
 PAYMENT_MAP = {
     0: "Flex Fare",
@@ -134,7 +146,13 @@ def agg_heatmap(df_in):
     )
     return heat.pivot(index="pickup_day_of_week", columns="pickup_hour", values="trips").fillna(0)
 
-df = load_data()
+try:
+    df = load_data()
+    st.write("✅ load_data() done. rows:", len(df))
+except Exception:
+    st.error(" load_data() crashed")
+    st.code(traceback.format_exc())
+    st.stop()
 
 st.title("📊 Dashboard")
 st.caption("Use the sidebar filters. All charts update instantly.")
