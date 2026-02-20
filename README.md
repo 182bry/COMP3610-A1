@@ -34,18 +34,18 @@ The application uses caching and pre-aggregations for performance on ~3M rows.
 ```bash
 git clone <your-repo-url>
 cd COMP3610_A1
-
+```
 ### 2. Create a virtual environment
 
-python -m venv venv
+```python -m venv venv
 venv\Scripts\activate
-
+```
 ### 3. Install dependencies
 
-pip install -r requirements.txt
+```pip install -r requirements.txt```
 
 ### 4. Run the dashboard 
 
-streamlit run app.py
+```streamlit run app.py```
 
 ### Deployed Dashboard URL: 
