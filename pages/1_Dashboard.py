@@ -9,19 +9,6 @@ import plotly.express as px
 import os 
 import requests
 
-st.write("Dashboard page started")
-st.write("cwd:", os.getcwd())
-st.write("here:", os.listdir("."))
-
-try:
-    st.write("data exists:", os.path.exists("data"))
-    st.write("processed exists:", os.path.exists("data/processed"))
-    if os.path.exists("data/processed"):
-        st.write("processed files:", os.listdir("data/processed"))
-except Exception:
-    st.code(traceback.format_exc())
-
-
 PAYMENT_MAP = {
     0: "Flex Fare",
     1: "Credit Card",
@@ -146,13 +133,7 @@ def agg_heatmap(df_in):
     )
     return heat.pivot(index="pickup_day_of_week", columns="pickup_hour", values="trips").fillna(0)
 
-try:
-    df = load_data()
-    st.write("✅ load_data() done. rows:", len(df))
-except Exception:
-    st.error(" load_data() crashed")
-    st.code(traceback.format_exc())
-    st.stop()
+df = load_data()
 
 st.title("📊 Dashboard")
 st.caption("Use the sidebar filters. All charts update instantly.")
