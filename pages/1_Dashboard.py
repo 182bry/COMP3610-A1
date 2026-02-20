@@ -204,9 +204,20 @@ hourly_fare = agg_hourly_fare(filtered)
 pay = agg_payment(filtered)
 pivot = agg_heatmap(filtered)
 
-tab1, tab2, tab3 = st.tabs(["Zones", "Time Patterns", "Distance & Payments"])
+# --- Persisted "tabs" (fixes: filters resetting to Zones) ---
+section = st.radio(
+    "View",
+    ["Zones", "Time Patterns", "Distance & Payments"],
+    horizontal=True,
+    key="active_section"
+)
 
-with tab1:
+st.divider()
+
+# -------------------------
+# ZONES (r)
+# -------------------------
+if section == "Zones":
     st.subheader(" Top 10 Pickup Zones by Trip Count")
     fig_r = px.bar(
         top10,
@@ -226,7 +237,10 @@ with tab1:
         "If you narrow to late-night hours, you’ll typically see entertainment districts rise."
     )
 
-with tab2:
+# -------------------------
+# TIME PATTERNS (s + v)
+# -------------------------
+elif section == "Time Patterns":
     st.subheader(" Average Fare by Hour of Day")
     fig_s = px.line(
         hourly_fare,
@@ -264,7 +278,10 @@ with tab2:
         "The heatmap makes it easy to spot repeated peak windows that TLC operations could plan around."
     )
 
-with tab3:
+# -------------------------
+# DISTANCE & PAYMENTS (t + u)
+# -------------------------
+else:
     st.subheader(" Distribution of Trip Distances")
     plot_dist = filtered[filtered["trip_distance"].between(0, 30)]
 
