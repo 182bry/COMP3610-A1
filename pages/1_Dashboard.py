@@ -9,6 +9,13 @@ import plotly.express as px
 import os 
 import requests
 
+st.set_page_config(
+    page_title="Dashboard",
+    page_icon="📊",
+    layout="wide",
+    initial_sidebar_state="expanded"
+)
+
 PAYMENT_MAP = {
     0: "Flex Fare",
     1: "Credit Card",
