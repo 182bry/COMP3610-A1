@@ -5,6 +5,8 @@ COMP 3610 Assignment 1 - Dashboard Page (Required Visualizations)
 import streamlit as st
 import pandas as pd
 import plotly.express as px
+import os 
+import requests
 
 st.set_page_config(page_title="Dashboard", page_icon="📊", layout="wide")
 
@@ -20,14 +22,71 @@ PAYMENT_MAP = {
 
 DAY_ORDER = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
 
-@st.cache_data
-def load_data():
-    df = pd.read_parquet("data/processed/taxi_clean.parquet")
-    zones = pd.read_csv("data/raw/taxi_zone_lookup.csv")[["LocationID", "Borough", "Zone"]]
+# Remote Dataset Configuration (Streamlit Cloud Compatibility)
+TRIPS_URL = "https://d37ci6vzurychx.cloudfront.net/trip-data/yellow_tripdata_2024-01.parquet"
+ZONES_URL = "https://d37ci6vzurychx.cloudfront.net/misc/taxi_zone_lookup.csv"
 
+RAW_DIR = "data/raw"
+PROCESSED_DIR = "data/processed"
+RAW_TRIPS_PATH = os.path.join(RAW_DIR, "yellow_tripdata_2024-01.parquet")
+RAW_ZONES_PATH = os.path.join(RAW_DIR, "taxi_zone_lookup.csv")
+CLEAN_PATH = os.path.join(PROCESSED_DIR, "taxi_clean.parquet")
+
+def download_file(url: str, path: str):
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    if os.path.exists(path):
+        return
+    r = requests.get(url, stream=True, timeout=60)
+    r.raise_for_status()
+    with open(path, "wb") as f:
+        for chunk in r.iter_content(chunk_size=1024 * 1024):
+            if chunk:
+                f.write(chunk)
+
+@st.cache_data(show_spinner="Loading & preparing dataset...")
+def load_data():
+    # Ensure raw files exist in Streamlit Cloud container
+    download_file(TRIPS_URL, RAW_TRIPS_PATH)
+    download_file(ZONES_URL, RAW_ZONES_PATH)
+
+    zones = pd.read_csv(RAW_ZONES_PATH)[["LocationID", "Borough", "Zone"]]
+
+    # If cleaned parquet exists, use it (fast)
+    if os.path.exists(CLEAN_PATH):
+        df = pd.read_parquet(CLEAN_PATH)
+    else:
+        # Build cleaned parquet once
+        df = pd.read_parquet(RAW_TRIPS_PATH)
+
+        # Datetime + Jan 2024 filter
+        df["tpep_pickup_datetime"] = pd.to_datetime(df["tpep_pickup_datetime"])
+        df["tpep_dropoff_datetime"] = pd.to_datetime(df["tpep_dropoff_datetime"])
+        df = df[(df["tpep_pickup_datetime"] >= "2024-01-01") & (df["tpep_pickup_datetime"] < "2024-02-01")]
+
+        # Cleaning 
+        critical_cols = ["tpep_pickup_datetime", "tpep_dropoff_datetime", "PULocationID", "DOLocationID", "fare_amount"]
+        df = df.dropna(subset=critical_cols)
+
+        df = df[df["trip_distance"] > 0]
+        df = df[(df["fare_amount"] >= 0) & (df["fare_amount"] <= 500)]
+        df = df[df["tpep_dropoff_datetime"] >= df["tpep_pickup_datetime"]]
+        df = df[df["passenger_count"] > 0]
+        df = df[df["trip_distance"] < 50]
+
+        # Feature engineering (exact 4 columns)
+        df["trip_duration_minutes"] = (df["tpep_dropoff_datetime"] - df["tpep_pickup_datetime"]).dt.total_seconds() / 60
+        hours = df["trip_duration_minutes"] / 60
+        df["trip_speed_mph"] = (df["trip_distance"] / hours).replace([float("inf"), -float("inf")], 0).fillna(0)
+        df["pickup_hour"] = df["tpep_pickup_datetime"].dt.hour
+        df["pickup_day_of_week"] = df["tpep_pickup_datetime"].dt.day_name()
+
+        os.makedirs(PROCESSED_DIR, exist_ok=True)
+        df.to_parquet(CLEAN_PATH, index=False)
+
+    # Make sure pickup datetime exists as datetime for downstream
     df["tpep_pickup_datetime"] = pd.to_datetime(df["tpep_pickup_datetime"])
 
-    # Ensure fields for filtering + labels
+    # Fields for filtering + labels
     df["pickup_date"] = df["tpep_pickup_datetime"].dt.date
     df["payment_name"] = df["payment_type"].map(PAYMENT_MAP).fillna("Other")
 
@@ -35,11 +94,9 @@ def load_data():
     zones_pickup = zones.rename(columns={"Zone": "pickup_zone", "Borough": "pickup_borough"})
     df = df.merge(zones_pickup, left_on="PULocationID", right_on="LocationID", how="left")
 
-    # Ensure weekday ordering is consistent
-    if "pickup_day_of_week" not in df.columns:
-        df["pickup_day_of_week"] = df["tpep_pickup_datetime"].dt.day_name()
-
+    # Ensure weekday ordering
     df["pickup_day_of_week"] = pd.Categorical(df["pickup_day_of_week"], categories=DAY_ORDER, ordered=True)
+
     return df
 
 # ---- Cached aggregations (optional but good for performance) ----

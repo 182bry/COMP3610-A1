@@ -9,6 +9,8 @@ Run:
 
 import streamlit as st
 import pandas as pd
+import os
+import requests
 
 st.set_page_config(
     page_title="NYC Yellow Taxi Dashboard (A1)",
@@ -17,7 +19,7 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# --- Theme-like CSS polish (stronger header) ---
+# --- Header ---
 st.markdown("""
 <style>
     .hero {
@@ -46,11 +48,69 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-@st.cache_data
+# Remote Dataset Configuration (Streamlit Cloud Compatibility)
+TRIPS_URL = "https://d37ci6vzurychx.cloudfront.net/trip-data/yellow_tripdata_2024-01.parquet"
+ZONES_URL = "https://d37ci6vzurychx.cloudfront.net/misc/taxi_zone_lookup.csv"
+
+RAW_DIR = "data/raw"
+PROCESSED_DIR = "data/processed"
+RAW_TRIPS_PATH = os.path.join(RAW_DIR, "yellow_tripdata_2024-01.parquet")
+RAW_ZONES_PATH = os.path.join(RAW_DIR, "taxi_zone_lookup.csv")
+CLEAN_PATH = os.path.join(PROCESSED_DIR, "taxi_clean.parquet")
+
+def download_file(url: str, path: str):
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    if os.path.exists(path):
+        return
+    r = requests.get(url, stream=True, timeout=60)
+    r.raise_for_status()
+    with open(path, "wb") as f:
+        for chunk in r.iter_content(chunk_size=1024 * 1024):
+            if chunk:
+                f.write(chunk)
+
+@st.cache_data(show_spinner="Loading dataset for overview...")
 def load_overview_data():
-    df = pd.read_parquet("data/processed/taxi_clean.parquet")
+    # Ensure raw files exist in Streamlit Cloud container
+    download_file(TRIPS_URL, RAW_TRIPS_PATH)
+    download_file(ZONES_URL, RAW_ZONES_PATH)
+
+    # If cleaned parquet exists, use it (fast)
+    if os.path.exists(CLEAN_PATH):
+        df = pd.read_parquet(CLEAN_PATH)
+        df["tpep_pickup_datetime"] = pd.to_datetime(df["tpep_pickup_datetime"])
+        df["pickup_date"] = df["tpep_pickup_datetime"].dt.date
+        return df
+
+    # Otherwise: build cleaned parquet once
+    df = pd.read_parquet(RAW_TRIPS_PATH)
+
+    # Basic cleaning 
     df["tpep_pickup_datetime"] = pd.to_datetime(df["tpep_pickup_datetime"])
+    df["tpep_dropoff_datetime"] = pd.to_datetime(df["tpep_dropoff_datetime"])
+    df = df[(df["tpep_pickup_datetime"] >= "2024-01-01") & (df["tpep_pickup_datetime"] < "2024-02-01")]
+
+    critical_cols = ["tpep_pickup_datetime", "tpep_dropoff_datetime", "PULocationID", "DOLocationID", "fare_amount"]
+    df = df.dropna(subset=critical_cols)
+
+    df = df[df["trip_distance"] > 0]
+    df = df[(df["fare_amount"] >= 0) & (df["fare_amount"] <= 500)]
+    df = df[df["tpep_dropoff_datetime"] >= df["tpep_pickup_datetime"]]
+    df = df[df["passenger_count"] > 0]
+    df = df[df["trip_distance"] < 50]
+
+    # Feature engineering 
+    df["trip_duration_minutes"] = (df["tpep_dropoff_datetime"] - df["tpep_pickup_datetime"]).dt.total_seconds() / 60
+    hours = df["trip_duration_minutes"] / 60
+    df["trip_speed_mph"] = (df["trip_distance"] / hours).replace([float("inf"), -float("inf")], 0).fillna(0)
+    df["pickup_hour"] = df["tpep_pickup_datetime"].dt.hour
+    df["pickup_day_of_week"] = df["tpep_pickup_datetime"].dt.day_name()
     df["pickup_date"] = df["tpep_pickup_datetime"].dt.date
+
+    # Save for re-use
+    os.makedirs(PROCESSED_DIR, exist_ok=True)
+    df.to_parquet(CLEAN_PATH, index=False)
+
     return df
 
 df = load_overview_data()
