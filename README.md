@@ -32,7 +32,7 @@ The application uses caching and pre-aggregations for performance on ~3M rows.
 ### 1. Clone the repository
 
 ```bash
-git clone <your-repo-url>
+git clone https://github.com/182bry/COMP3610-A1.git
 cd COMP3610_A1
 ```
 ### 2. Create a virtual environment
@@ -49,3 +49,4 @@ venv\Scripts\activate
 ```streamlit run app.py```
 
 ### Deployed Dashboard URL: 
+https://comp3610-a1-lmyotw2rogcwuxxpmlixme.streamlit.app/ 
